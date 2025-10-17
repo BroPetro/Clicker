@@ -6,37 +6,11 @@
     <title>Turtle Tap</title>
     <link rel="stylesheet" type="text/css" href="style/style.css">
     <meta name="theme-color" content="#ff4444">
-    <!-- Firebase SDKs v9.22.0 -->
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js"></script>
 </head>
 <body>
-    <div class="game-container">
-        <h1>Turtle Tap</h1>
-        
-        <!-- Authentication Section -->
-        <div id="auth-section" class="auth-section">
-            <input type="email" id="email-input" placeholder="Email" class="input-field">
-            <input type="password" id="password-input" placeholder="Пароль" class="input-field">
-            <button id="create-account-btn" class="auth-button">Створити акаунт</button>
-            <button id="sign-in-btn" class="auth-button">Увійти</button>
-            <button id="sign-out-btn" class="auth-button" style="display: none;">Вийти</button>
-        </div>
-        
-        <!-- Status Message -->
-        <div id="status-message" class="status-message"></div>
-        
-        <!-- Game Section -->
-        <div id="game-section" style="display: none;">
-            <button id="targetButton" class="buttonclicker">
-                <img id="turtleImage" src="Assets/turtle-basick.png" class="turtle1" alt="Turtle">
-            </button><br><br>
-            <div id="score">Очки: 0 (Множник: 1)</div><br>
-            <button id="resetButton" class="reset-button">Скинути гру 🐢</button>
-        </div>
-    </div>
-    
-    <script type="module" src="java script/script.js"></script>
+    <button id="targetButton" class="buttonclicker"><img id="turtleImage" src="Assets/turtle-basick.png" class="turtle1" alt="Turtle"></button><br><br>
+    <div id="score">Очки: 0</div><br>
+    <button id="resetButton" class="reset-button">Скинути</button>
+    <script src="java script/script.js"></script>
 </body>
 </html>
