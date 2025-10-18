@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Turtle Tap</title>
+  <meta name="theme-color" content="#ff4444">
+  <style>
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background-color: #f0f0f0;
+    }
+
+    .buttonclicker {
+      width: 150px;
+      height: 100px;
+      border: none;
+      cursor: pointer;
+      background-color: transparent;
+      transition: transform 0.1s ease, filter 0.1s ease;
+      padding: 0;
+      display: none; /* спочатку приховано */
+    }
+
+    .buttonclicker:active {
+      transform: scale(0.9);
+      filter: brightness(85%);
+    }
+
+    .turtle1 {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    #score {
+      font-size: 24px;
+      font-weight: bold;
+      margin: 10px 0;
+      display: none;
+    }
+
+    .reset-button {
+      padding: 10px 20px;
+      background-color: #666;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      display: none;
+    }
+
+    .reset-button:hover {
+      background-color: #555;
+    }
+
+    #nicknameForm {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    #nicknameInput {
+      padding: 10px;
+      border-radius: 5px;
+      border: 1px solid #aaa;
+      font-size: 16px;
+      margin-bottom: 10px;
+      width: 200px;
+    }
+
+    #startButton {
+      padding: 10px 20px;
+      background-color: #ff4444;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    #startButton:hover {
+      background-color: #dd2222;
+    }
+  </style>
+</head>
+<body>
+  <div id="nicknameForm">
+    <h2>Введи свій нік 🐢</h2>
+    <input id="nicknameInput" type="text" placeholder="Наприклад: PetroTurtle">
+    <button id="startButton">Почати гру</button>
+  </div>
+
+  <button id="targetButton" class="buttonclicker">
+    <img id="turtleImage" src="Assets/turtle-basick.png" class="turtle1" alt="Turtle">
+  </button>
+  <div id="score">Очки: 0</div>
+  <button id="resetButton" class="reset-button">Скинути</button>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+    import { getDatabase, ref, set, get, update } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js";
+
+    // 🔥 Firebase конфіг
+    const firebaseConfig = {
+      apiKey: "AIzaSyCS_jrZxtztQeArogU8yfCm4BIiNphapsE",
+      authDomain: "party-8c521.firebaseapp.com",
+      databaseURL: "https://party-8c521-default-rtdb.europe-west1.firebasedatabase.app",
+      projectId: "party-8c521",
+      storageBucket: "party-8c521.firebasestorage.app",
+      messagingSenderId: "630338352175",
+      appId: "1:630338352175:web:96367f9e3223677b58c2da",
+      measurementId: "G-L76NX1ZBWX"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    // 🔧 Елементи
+    const nicknameForm = document.getElementById('nicknameForm');
+    const nicknameInput = document.getElementById('nicknameInput');
+    const startButton = document.getElementById('startButton');
+    const scoreDisplay = document.getElementById('score');
+    const targetButton = document.getElementById('targetButton');
+    const resetButton = document.getElementById('resetButton');
+
+    let playerId = localStorage.getItem('turtleNickname');
+    let score = 0;
+    let multiplier = 1;
+    let lastClickTime = 0;
+    const minClickInterval = 100;
+
+    // Якщо нік уже є — починаємо гру
+    if (playerId) {
+      startGame();
+    }
+
+    // Кнопка "Почати гру"
+    startButton.addEventListener('click', () => {
+      const nickname = nicknameInput.value.trim();
+      if (nickname.length < 3) {
+        alert("Нік має бути мінімум 3 символи 🐢");
+        return;
+      }
+      playerId = nickname;
+      localStorage.setItem('turtleNickname', playerId);
+      startGame();
+    });
+
+    async function startGame() {
+      nicknameForm.style.display = "none";
+      targetButton.style.display = "block";
+      scoreDisplay.style.display = "block";
+      resetButton.style.display = "block";
+      await loadScore();
+    }
+
+    // Завантаження даних з Firebase
+    async function loadScore() {
+      const snapshot = await get(ref(db, `players/${playerId}`));
+      if (snapshot.exists()) {
+        const data = snapshot.val();
+        score = data.score || 0;
+        multiplier = data.multiplier || 1;
+      }
+      updateScore();
+    }
+
+    function updateScore() {
+      scoreDisplay.textContent = `Очки: ${score}`;
+    }
+
+    function saveScore() {
+      update(ref(db, `players/${playerId}`), {
+        score: score,
+        multiplier: multiplier,
+        lastUpdated: Date.now()
+      });
+    }
+
+    targetButton.addEventListener('click', () => {
+      const now = Date.now();
+      const diff = now - lastClickTime;
+      if (diff < minClickInterval && lastClickTime !== 0) {
+        alert("Хей, без автоклікерів 😉");
+        return;
+      }
+      score += multiplier;
+      updateScore();
+      saveScore();
+      lastClickTime = now;
+    });
+
+    resetButton.addEventListener('click', () => {
+      score = 0;
+      multiplier = 1;
+      updateScore();
+      saveScore();
+    });
+  </script>
+</body>
+</html>
