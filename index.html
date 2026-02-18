@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Мій GPS Трекер</title>
+    
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+        #map {
+            height: 100vh;
+            width: 100%;
+        }
+        .ui-panel {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 10px 20px;
+            border-radius: 25px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            backdrop-filter: blur(5px);
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            background: #4CAF50;
+            border-radius: 50%;
+            display: inline-block;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="ui-panel">
+        <div class="status-dot"></div>
+        <span id="status">Пошук GPS...</span>
+    </div>
+
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <script>
+        // Ініціалізація карти (центр на Україну за замовчуванням)
+        const map = L.map('map').setView([48.3794, 31.1656], 6);
+
+        // Додаємо шар карти (OpenStreetMap)
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        const statusEl = document.getElementById('status');
+        let firstZoom = true;
+
+        // Функція обробки позиції
+        function onLocationFound(position) {
+            const lat = position.coords.latitude;
+            const lng = position.coords.longitude;
+            const accuracy = position.coords.accuracy;
+
+            // Додаємо кружечок "де ми були"
+            L.circle([lat, lng], {
+                color: '#3388ff',
+                fillColor: '#3388ff',
+                fillOpacity: 0.5,
+                radius: 5 // розмір кружечка в метрах
+            }).addTo(map);
+
+            // Якщо це перше виявлення — фокусуємо камеру
+            if (firstZoom) {
+                map.setView([lat, lng], 16);
+                firstZoom = false;
+            }
+
+            statusEl.innerText = `Точність: ${Math.round(accuracy)}м`;
+        }
+
+        function onLocationError(e) {
+            statusEl.innerText = "Доступ до GPS заборонено";
+            statusEl.style.color = "red";
+        }
+
+        // Постійне відстеження
+        if ("geolocation" in navigator) {
+            navigator.geolocation.watchPosition(onLocationFound, onLocationError, {
+                enableHighAccuracy: true,
+                timeout: 5000,
+                maximumAge: 0
+            });
+        } else {
+            alert("Ваш браузер не підтримує геолокацію");
+        }
+    </script>
+</body>
+</html>
