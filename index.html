@@ -2,97 +2,480 @@
 <html lang="uk">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>My Life Map</title>
 
 <link rel="manifest" href="manifest.json">
-
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
 <style>
-body { margin: 0; }
-#map { height: 100vh; }
+:root {
+    --bg: #09111f;
+    --panel: rgba(9, 17, 31, 0.86);
+    --text: #f7fbff;
+    --muted: #9eb3cc;
+    --accent: #27d69b;
+    --accent-2: #2f80ff;
+    --danger: #ff4f6f;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+    margin: 0;
+    height: 100%;
+    font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+}
+
+#map { height: 100vh; width: 100vw; }
+
+#ui {
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 10px;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom));
+    pointer-events: none;
+}
+
+.panel {
+    max-width: 720px;
+    margin: 0 auto;
+    background: var(--panel);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.3);
+    padding: 12px;
+    pointer-events: auto;
+}
+
+.top-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.badge {
+    font-size: 0.8rem;
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.12);
+    color: var(--text);
+}
+
+.badge.active { background: rgba(39, 214, 155, 0.22); color: #8fffd2; }
+
+.stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.stat {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 8px;
+    text-align: center;
+}
+
+.stat b { display: block; font-size: 1rem; }
+.stat span { font-size: 0.75rem; color: var(--muted); }
+
+.progress-wrap { margin-bottom: 10px; }
+.progress-title {
+    font-size: 0.78rem;
+    color: var(--muted);
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 4px;
+}
+
+.progress {
+    width: 100%;
+    height: 8px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.15);
+    overflow: hidden;
+}
+
+.progress > div {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), #7fffd4);
+    width: 0;
+    transition: width 0.3s ease;
+}
+
+.controls {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
 
 button {
-    position: absolute;
-    z-index: 1000;
-    top: 10px;
-    left: 10px;
-    padding: 10px 15px;
+    border: none;
+    border-radius: 12px;
+    padding: 11px 10px;
+    font-size: 0.9rem;
+    font-weight: 600;
     cursor: pointer;
+    color: white;
+    background: var(--accent-2);
+    touch-action: manipulation;
+}
+
+button.secondary { background: #355073; }
+button.success { background: var(--accent); color: #043126; }
+button.danger { background: var(--danger); }
+button:active { transform: translateY(1px); }
+
+.floating {
+    position: fixed;
+    z-index: 1000;
+    top: calc(10px + env(safe-area-inset-top));
+    right: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.floating button {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    padding: 0;
+    font-size: 1.2rem;
+}
+
+@media (max-width: 520px) {
+    .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .stats .stat:first-child { grid-column: 1 / -1; }
+    .panel { border-radius: 14px; }
 }
 </style>
 </head>
 <body>
-
-<button onclick="startTracking()">Увімкнути GPS</button>
 <div id="map"></div>
 
+<div class="floating">
+    <button onclick="zoomIn()" aria-label="Наблизити">＋</button>
+    <button onclick="zoomOut()" aria-label="Віддалити">－</button>
+</div>
+
+<div id="ui">
+    <div class="panel">
+        <div class="top-row">
+            <div class="badge" id="gpsState">GPS: вимкнено</div>
+            <div class="badge" id="followState">Follow: увімкнено</div>
+        </div>
+
+        <div class="stats">
+            <div class="stat"><b id="tileCount">0</b><span>Плиток</span></div>
+            <div class="stat"><b id="distance">0 м</b><span>Дистанція</span></div>
+            <div class="stat"><b id="area">0 м²</b><span>Площа</span></div>
+        </div>
+
+        <div class="progress-wrap">
+            <div class="progress-title">
+                <span id="levelText">Рівень 1 • Новачок</span>
+                <span id="goalText">0 / 100</span>
+            </div>
+            <div class="progress"><div id="levelProgress"></div></div>
+        </div>
+
+        <div class="controls">
+            <button class="success" id="gpsBtn" onclick="toggleTracking()">Увімкнути GPS</button>
+            <button class="secondary" onclick="toggleFollow()">Follow режим</button>
+            <button class="secondary" onclick="toggleTheme()">Змінити стиль мапи</button>
+            <button class="secondary" onclick="exportProgress()">Експорт прогресу</button>
+            <button class="secondary" onclick="importProgress()">Імпорт прогресу</button>
+            <button class="danger" onclick="resetProgress()">Очистити прогрес</button>
+        </div>
+    </div>
+</div>
+
 <script>
-const map = L.map('map').setView([50, 30], 6);
-
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; OpenStreetMap contributors'
-}).addTo(map);
-
-// 🔥 Дуже маленькі плитки (~50-80м)
 const tileSize = 0.0005;
+const tileArea = 50 * 50;
 
-let visitedTiles = JSON.parse(localStorage.getItem("visitedTiles")) || [];
+const map = L.map('map', { zoomControl: false }).setView([50, 30], 6);
+
+const lightLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors'
+});
+const darkLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
+});
+
+let currentLayer = lightLayer.addTo(map);
+
+let visitedTiles = JSON.parse(localStorage.getItem('visitedTiles') || '[]');
 let visitedSet = new Set(visitedTiles);
+let isTracking = false;
+let followUser = JSON.parse(localStorage.getItem('followUser') || 'true');
+let watchId = null;
+let userMarker = null;
+let accuracyCircle = null;
+let lastPosition = null;
+let totalDistance = Number(localStorage.getItem('totalDistance') || 0);
 
-visitedSet.forEach(key => {
-    const [lat, lon] = key.split(",").map(Number);
+visitedSet.forEach((key) => {
+    const [lat, lon] = key.split(',').map(Number);
     drawTile(lat, lon);
 });
 
-function startTracking() {
-    if (navigator.geolocation) {
-        navigator.geolocation.watchPosition(showPosition, null, {
-            enableHighAccuracy: true
-        });
+updateStats();
+renderFollowState();
+
+function toggleTracking() {
+    if (isTracking) {
+        stopTracking();
     } else {
-        alert("GPS не підтримується");
+        startTracking();
     }
+}
+
+function startTracking() {
+    if (!navigator.geolocation) {
+        alert('GPS не підтримується на цьому пристрої');
+        return;
+    }
+
+    watchId = navigator.geolocation.watchPosition(showPosition, onPositionError, {
+        enableHighAccuracy: true,
+        maximumAge: 1000,
+        timeout: 10000
+    });
+
+    isTracking = true;
+    document.getElementById('gpsBtn').textContent = 'Вимкнути GPS';
+    document.getElementById('gpsBtn').classList.remove('success');
+    document.getElementById('gpsState').textContent = 'GPS: активний';
+    document.getElementById('gpsState').classList.add('active');
+}
+
+function stopTracking() {
+    if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId);
+        watchId = null;
+    }
+    isTracking = false;
+    document.getElementById('gpsBtn').textContent = 'Увімкнути GPS';
+    document.getElementById('gpsBtn').classList.add('success');
+    document.getElementById('gpsState').textContent = 'GPS: вимкнено';
+    document.getElementById('gpsState').classList.remove('active');
 }
 
 function showPosition(position) {
     const lat = position.coords.latitude;
     const lon = position.coords.longitude;
+    const accuracy = position.coords.accuracy || 0;
 
-    map.setView([lat, lon], 17);
+    if (followUser) {
+        map.setView([lat, lon], Math.max(map.getZoom(), 17));
+    }
+
+    const currentLatLng = L.latLng(lat, lon);
+
+    if (lastPosition) {
+        const segment = lastPosition.distanceTo(currentLatLng);
+        if (segment > 1 && segment < 1000) {
+            totalDistance += segment;
+            localStorage.setItem('totalDistance', totalDistance.toString());
+        }
+    }
+    lastPosition = currentLatLng;
+
+    if (!userMarker) {
+        userMarker = L.circleMarker([lat, lon], {
+            radius: 7,
+            color: '#ffffff',
+            weight: 2,
+            fillColor: '#2f80ff',
+            fillOpacity: 1
+        }).addTo(map);
+    } else {
+        userMarker.setLatLng([lat, lon]);
+    }
+
+    if (!accuracyCircle) {
+        accuracyCircle = L.circle([lat, lon], {
+            radius: accuracy,
+            color: '#2f80ff',
+            fillColor: '#2f80ff',
+            fillOpacity: 0.12,
+            weight: 1
+        }).addTo(map);
+    } else {
+        accuracyCircle.setLatLng([lat, lon]);
+        accuracyCircle.setRadius(accuracy);
+    }
 
     const tileLat = Math.floor(lat / tileSize) * tileSize;
     const tileLon = Math.floor(lon / tileSize) * tileSize;
-
-    const key = tileLat + "," + tileLon;
+    const key = tileLat + ',' + tileLon;
 
     if (!visitedSet.has(key)) {
         visitedSet.add(key);
         visitedTiles.push(key);
-        localStorage.setItem("visitedTiles", JSON.stringify(visitedTiles));
+        localStorage.setItem('visitedTiles', JSON.stringify(visitedTiles));
         drawTile(tileLat, tileLon);
     }
+
+    updateStats();
+}
+
+function onPositionError(error) {
+    const mapErrors = {
+        1: 'Немає доступу до геолокації. Дозволь GPS у браузері.',
+        2: 'Не вдалося визначити локацію.',
+        3: 'Час очікування GPS вичерпано.'
+    };
+    alert(mapErrors[error.code] || 'Помилка GPS.');
 }
 
 function drawTile(lat, lon) {
-    L.rectangle([
-        [lat, lon],
-        [lat + tileSize, lon + tileSize]
-    ], {
-        color: "#00ff88",
-        fillColor: "#00ff88",
-        fillOpacity: 0.5,
+    L.rectangle([[lat, lon], [lat + tileSize, lon + tileSize]], {
+        color: '#27d69b',
+        fillColor: '#27d69b',
+        fillOpacity: 0.45,
         weight: 0
     }).addTo(map);
 }
 
-// 🔥 Реєстрація Service Worker
+function updateStats() {
+    const tiles = visitedSet.size;
+    document.getElementById('tileCount').textContent = tiles;
+    document.getElementById('distance').textContent = formatDistance(totalDistance);
+    document.getElementById('area').textContent = formatArea(tiles * tileArea);
+
+    const levelGoal = Math.ceil(tiles / 100) * 100 || 100;
+    const level = Math.floor(tiles / 100) + 1;
+    const progress = Math.min((tiles % 100) / 100 * 100, 100);
+
+    document.getElementById('levelText').textContent = `Рівень ${level} • ${getRank(level)}`;
+    document.getElementById('goalText').textContent = `${tiles} / ${levelGoal}`;
+    document.getElementById('levelProgress').style.width = `${progress}%`;
+}
+
+function getRank(level) {
+    if (level >= 10) return 'Легенда';
+    if (level >= 6) return 'Мандрівник Pro';
+    if (level >= 3) return 'Дослідник';
+    return 'Новачок';
+}
+
+function formatDistance(m) {
+    if (m >= 1000) return `${(m / 1000).toFixed(2)} км`;
+    return `${Math.round(m)} м`;
+}
+
+function formatArea(m2) {
+    if (m2 >= 1000000) return `${(m2 / 1000000).toFixed(2)} км²`;
+    return `${Math.round(m2)} м²`;
+}
+
+function toggleFollow() {
+    followUser = !followUser;
+    localStorage.setItem('followUser', JSON.stringify(followUser));
+    renderFollowState();
+}
+
+function renderFollowState() {
+    const el = document.getElementById('followState');
+    el.textContent = `Follow: ${followUser ? 'увімкнено' : 'вимкнено'}`;
+    el.classList.toggle('active', followUser);
+}
+
+function toggleTheme() {
+    map.removeLayer(currentLayer);
+    currentLayer = currentLayer === lightLayer ? darkLayer : lightLayer;
+    map.addLayer(currentLayer);
+}
+
+function exportProgress() {
+    const data = {
+        visitedTiles: [...visitedSet],
+        totalDistance,
+        exportedAt: new Date().toISOString()
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `life-map-progress-${Date.now()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+}
+
+function importProgress() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'application/json';
+    input.onchange = () => {
+        const file = input.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+            try {
+                const parsed = JSON.parse(String(reader.result || '{}'));
+                const incomingTiles = Array.isArray(parsed.visitedTiles) ? parsed.visitedTiles : [];
+                const incomingDistance = Number(parsed.totalDistance || 0);
+
+                incomingTiles.forEach((tile) => {
+                    if (!visitedSet.has(tile)) {
+                        visitedSet.add(tile);
+                        visitedTiles.push(tile);
+                        const [lat, lon] = tile.split(',').map(Number);
+                        drawTile(lat, lon);
+                    }
+                });
+
+                totalDistance = Math.max(totalDistance, incomingDistance);
+                localStorage.setItem('visitedTiles', JSON.stringify(visitedTiles));
+                localStorage.setItem('totalDistance', totalDistance.toString());
+                updateStats();
+                alert('Прогрес успішно імпортовано!');
+            } catch {
+                alert('Не вдалося прочитати файл.');
+            }
+        };
+        reader.readAsText(file);
+    };
+    input.click();
+}
+
+function resetProgress() {
+    if (!confirm('Точно очистити прогрес? Це незворотно.')) return;
+    localStorage.removeItem('visitedTiles');
+    localStorage.removeItem('totalDistance');
+    visitedTiles = [];
+    visitedSet = new Set();
+    totalDistance = 0;
+    location.reload();
+}
+
+function zoomIn() {
+    map.zoomIn();
+}
+
+function zoomOut() {
+    map.zoomOut();
+}
+
 if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js');
 }
 </script>
-
 </body>
 </html>
